@@ -155,8 +155,12 @@ with user_type as (-----新老客
 )
 ,q_uv as (
         select distinct dt 
-                ,case when fromforlog='4104' or fromforlog='4106' then '[4104,4106]' else fromforlog end fromforlog
-                ,case when fromforlog='4104' or fromforlog='4106' then '二屏内容贴' 
+                ,case when fromforlog in ('4104','4106') then '[4104,4106]' when  fromforlog in ('131','913','914') then '[131,913,914]' when  fromforlog in ('96','795','671','1096') then '[96,795,671,1096]'  else fromforlog end fromforlog
+                ,case when fromforlog in ('4104','4106')  then '二屏内容贴' 
+                      when fromforlog in ('131','913','914')  then 'App首页宫格-海外酒店' 
+                      when fromforlog in ('96','795','671','1096')  then '大搜相关' 
+                    when fromforlog='352' then '再次预订' 
+                    when fromforlog='422' then '酒店详情推荐模块-酒店单品' 
                     when fromforlog='200000081' then '二屏商卡' 
                     when fromforlog='200000083' then '市场活动去使用' 
                     when fromforlog='200000105' then '天天领券任务' 
@@ -166,11 +170,11 @@ with user_type as (-----新老客
                     when fromforlog='200000120' then '带参数push' 
                     when fromforlog='200000122' then '国酒大搜落地页商卡' 
                     when fromforlog='200000123' then '带参数短信' 
-                    when fromforlog='671' then '大搜落地页-酒店tab' 
-                    when fromforlog='96' then '大搜' 
+                    -- when fromforlog='671' then '大搜落地页-酒店tab' 
+                    -- when fromforlog='96' then '大搜' 
                     when fromforlog='4626' then '我的页面弹窗（机酒用户）' 
-                    when fromforlog='913' then 'App首页宫格-酒店频道-海外酒店tab' 
-                    when fromforlog='914' then 'App首页-海外酒店' 
+                    -- when fromforlog='913' then 'App首页宫格-酒店频道-海外酒店tab' 
+                    -- when fromforlog='914' then 'App首页-海外酒店' 
                     when fromforlog='4604' then '国际酒店H页快筛标签' 
                     when fromforlog='824' then '收藏跳转到酒店详情页' 
                 end as fromforlog_type
@@ -189,7 +193,7 @@ with user_type as (-----新老客
             and (search_pv + detail_pv + booking_pv + order_pv) > 0
             and a.user_name is not null and a.user_name not in ('null', 'NULL', '', ' ')
             and a.user_id is not null and a.user_id not in ('null', 'NULL', '', ' ')
-            and fromforlog in ('200000119','200000120','4104','4106','200000081','200000123','200000121','200000122','200000105','200000118','200000083','671','96','4626','913','914','4604','824') 
+            and fromforlog in ('131','795','1096','352','422','200000119','200000120','4104','4106','200000081','200000123','200000121','200000122','200000105','200000118','200000083','671','96','4626','913','914','4604','824') 
         )
 ,q_app_order as (----订单明细表表包含取消  分目的地、新老维度 APP端
     select order_date
@@ -266,24 +270,26 @@ from (
     where t2.user_id is not null
     group by 1,2,3,4
 )t2 on t1.dt=t2.order_date and t1.fromforlog=t2.fromforlog and t1.mdd=t2.mdd
-order by  case when fromforlog = '913' then 1
-               when fromforlog = '96' then 2
-               when fromforlog = '914' then 3
-               when fromforlog = '824' then 4
-               when fromforlog = '671' then 5
-               when fromforlog = '4626' then 6
-               when fromforlog = '4604' then 7
-               when fromforlog = '[4104,4106]' then 8
-               when fromforlog = '200000083' then 9
-               when fromforlog = '200000105' then 10
-               when fromforlog = '200000123' then 11
-               when fromforlog = '200000118' then 12
-               when fromforlog = '200000081' then 13
-               when fromforlog = '200000120' then 14
-               when fromforlog = '200000119' then 15
-               when fromforlog = '200000121' then 16
-               when fromforlog = '200000122' then 17
-          end asc
+order by  
+        case when fromforlog = '[131,913,914]' then 1
+            when fromforlog = '[96,795,671,1096]' then 2
+            when fromforlog = '824' then 3
+            when fromforlog = '352' then 4
+            when fromforlog = '4626' then 5
+            when fromforlog = '422' then 6
+            when fromforlog = '4604' then 7
+            when fromforlog = '[4104,4106]' then 8
+            when fromforlog = '200000105' then 9
+            when fromforlog = '200000120' then 10
+            when fromforlog = '200000118' then 11
+            when fromforlog = '200000083' then 12
+            when fromforlog = '200000123' then 13
+            when fromforlog = '200000081' then 14
+            when fromforlog = '200000119' then 15
+            when fromforlog = '200000121' then 16
+            when fromforlog = '200000122' then 17
+            else 99
+        end asc,
           ,t1.dt desc
           ,t1.mdd desc
 ;

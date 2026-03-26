@@ -158,46 +158,62 @@ with user_type as
     group by 1,2
 )
 ,user_nr as   (--- 内容交叉
-    select  concat(substr(d.dt, 1, 4), '-', substr(d.dt, 5, 2), '-', substr(d.dt, 7, 2)) dt
-            , uv.user_name
+    -- select  concat(substr(d.dt, 1, 4), '-', substr(d.dt, 5, 2), '-', substr(d.dt, 7, 2)) dt
+    --         , uv.user_name
+    --         , '内容交叉' as  channel
+    --         , 4         as  user_number
+    -- from (--酒店帖
+    --         select distinct global_key
+    --                      , poi_id
+    --                      , poi_type
+    --                      , city_name
+    --         from c_desert_feed.dw_feedstream_qulang_detail_info
+    --         where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd') and status = 0
+    --     ) a
+    -- join (   ---  限制海外城市
+    --         select city_type,city_name
+    --         from c_desert_feed.dim_content_city_derived_type_da
+    --         where dt = date_sub(current_date, 1) and city_type = 2
+    --     ) w on a.city_name = w.city_name
+    -- --AB级
+    -- join (
+    --         select distinct global_key, tag_id
+    --         from c_desert_feed.ods_feedstream_qulang_footprint_detail_level_tags
+    --         where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
+    --             and tag_id in ('857', '860')
+    --             and status = 0
+    --     ) c on a.global_key = c.global_key
+    -- left join (
+    --         select distinct global_key
+    --         from c_desert_feed.ods_feedstream_qulang_content_goods_relate_info
+    --         where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd') and goods_type = 7
+    --     ) e on a.global_key = e.global_key
+    -- --曝光表
+    -- left join ( --- 需要修改时间
+    --         select dt,user_id,global_key,request_id,is_clicked
+    --         from c_desert_feed.dw_feedstream_erping_list_show
+    --         where dt >= from_unixtime(unix_timestamp() - 86400 * 30, 'yyyyMMdd')
+    --             and dt <= from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
+    --     ) d on a.global_key = d.global_key
+    -- left join uv on d.user_id = uv.user_name  and d.dt = replace(uv.dt,'-','')
+    -- where e.global_key is not null
+    --       and is_clicked = 1
+    -- group by 1,2
+
+    select  a.dt 
+            ,a.user_name
             , '内容交叉' as  channel
             , 4         as  user_number
-    from (--酒店帖
-            select distinct global_key
-                         , poi_id
-                         , poi_type
-                         , city_name
-            from c_desert_feed.dw_feedstream_qulang_detail_info
-            where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd') and status = 0
-        ) a
-    join (   ---  限制海外城市
-            select city_type,city_name
-            from c_desert_feed.dim_content_city_derived_type_da
-            where dt = date_sub(current_date, 1) and city_type = 2
-        ) w on a.city_name = w.city_name
-    --AB级
-    join (
-            select distinct global_key, tag_id
-            from c_desert_feed.ods_feedstream_qulang_footprint_detail_level_tags
-            where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
-                and tag_id in ('857', '860')
-                and status = 0
-        ) c on a.global_key = c.global_key
-    left join (
-            select distinct global_key
-            from c_desert_feed.ods_feedstream_qulang_content_goods_relate_info
-            where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd') and goods_type = 7
-        ) e on a.global_key = e.global_key
-    --曝光表
-    left join ( --- 需要修改时间
-            select dt,user_id,global_key,request_id,is_clicked
-            from c_desert_feed.dw_feedstream_erping_list_show
-            where dt >= from_unixtime(unix_timestamp() - 86400 * 30, 'yyyyMMdd')
-                and dt <= from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
-        ) d on a.global_key = d.global_key
-    left join uv on d.user_id = uv.user_name  and d.dt = replace(uv.dt,'-','')
-    where e.global_key is not null
-          and is_clicked = 1
+    from ihotel_default.mdw_user_app_log_sdbo_di_v1 a
+    left join uv t2 on a.dt = t2.dt and a.user_id=t2.user_id
+    where a.dt >= date_sub(current_date, 15)
+       and a.dt <= date_sub(current_date, 1)
+       and business_type = 'hotel'
+       and (province_name in ('台湾', '澳门', '香港') or a.country_name != '中国')
+       and (search_pv + detail_pv + booking_pv + order_pv) > 0
+       and a.user_name is not null and a.user_name not in ('null', 'NULL', '', ' ')
+       and a.user_id is not null and a.user_id not in ('null', 'NULL', '', ' ')
+       and fromforlog in ('4104','4106') 
     group by 1,2
 )
 ,user_hd as (--营销活动
