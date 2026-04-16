@@ -570,7 +570,7 @@ with order_90 as (
             ,coalesce(get_json_object(ext_flag_map['promotion_enjoy_first_info'], '$.promotionAmount'), 0) promotionAmount -- 优惠先享补贴金额
             ,t.ab_type
     from default.mdw_order_v3_international a 
-    left join abt t on a.user_id = t.user_id  and a.order_date=t.dt
+    left join abt t on lower(a.user_id) = lower(t.user_id)  and a.order_date=t.dt
     where a.dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
         and (province_name in ('台湾','澳门','香港') or a.country_name !='中国') 
         and is_valid = '1'
@@ -586,7 +586,7 @@ with order_90 as (
         t.ab_type,a.dt
         ,count(distinct a.user_id) as `q_uv`
     from ihotel_default.mdw_user_app_log_sdbo_di_v1 a 
-    left join abt t on a.user_id = t.user_id  and a.dt=t.dt
+    left join abt t on lower(a.user_id) = lower(t.user_id)  and a.dt=t.dt
     where a.dt  >= '2026-02-08'  and a.dt <= date_sub(current_date, 1)
         and business_type = 'hotel'
         and (province_name in ('台湾', '澳门', '香港') or a.country_name != '中国')
