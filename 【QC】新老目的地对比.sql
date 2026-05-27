@@ -19,16 +19,16 @@ with user_type as
             ,case when dt > b.min_order_date then '老客' else '新客' end as user_type
             ,a.user_id
             ,a.user_name
-     from ihotel_default.mdw_user_app_log_sdbo_di_v1 a
-     left join temp.temp_yiquny_zhang_ihotel_area_region_forever e on a.country_name = e.country_name
-     left join user_type b on a.user_id = b.user_id 
-     where dt >= date_sub(current_date, 30)
-       and dt <= date_sub(current_date, 1)
-       and business_type = 'hotel'
-       and (province_name in ('台湾', '澳门', '香港') or a.country_name != '中国')
-       and (search_pv + detail_pv + booking_pv + order_pv) > 0
-       and a.user_name is not null and a.user_name not in ('null', 'NULL', '', ' ')
-       and a.user_id is not null and a.user_id not in ('null', 'NULL', '', ' ')
+    from ihotel_default.mdw_user_app_log_sdbo_di_v1 a
+    left join temp.temp_yiquny_zhang_ihotel_area_region_forever e on a.country_name = e.country_name
+    left join user_type b on a.user_id = b.user_id 
+    where dt >= date_sub(current_date, 30)
+        and dt <= date_sub(current_date, 1)
+        and business_type = 'hotel'
+        and (province_name in ('台湾', '澳门', '香港') or a.country_name != '中国')
+        and (search_pv + detail_pv + booking_pv + order_pv) > 0
+        and a.user_name is not null and a.user_name not in ('null', 'NULL', '', ' ')
+        and a.user_id is not null and a.user_id not in ('null', 'NULL', '', ' ')
 )
 
 ,q_uv_info as
@@ -272,10 +272,22 @@ with user_type as
             ,extend_info['room_night'] room_night
             ,extend_info['STAR'] star
             -- ,get_json_object(json_path_array(discount_detail, '$.detail')[1],'$.amount') cqe  -- C_券额
-            ,get_json_object(discount_detail, '$.detail[1].amount') as cqe  -- C_券额
+            ,get_json_object(orig_discount_detail, '$.detail[1].amount') as cqe  -- C_券额
     from ihotel_default.ceq_three_sync_pull_edw_trade_tripart_qunar_oversea_hotelorder_reconfig_da o
     left join c_user_type u on o.user_id=u.user_id
     left join temp.temp_yiquny_zhang_ihotel_area_region_forever c on extend_info['COUNTRY'] = c.country_name
+    left join (
+        select distinct order_no as order_no_oc
+               ,orig_discount_detail
+        from ihotel_default.ceq_three_sync_pull_edw_trade_tripart_qunar_oversea_hotelorder_reconfig_da_patch
+        where dt = date_sub(current_date, 1)
+            and extend_info['IS_IBU'] = '0'
+            and extend_info['book_channel'] = 'Ctrip'
+            and extend_info['sub_book_channel'] = 'Direct-Ctrip'
+            and terminal_channel_type = 'app'
+            and (extend_info['CANCEL_TIME'] is null or extend_info['CANCEL_TIME']='NULL' or substr((extend_info['CANCEL_TIME']),1,10)>substr(order_date,1,10))
+            and substr(order_date,1,10) between date_sub(current_date, 30) and date_sub(current_date, 1)
+    ) oc on o.order_no = oc.order_no_oc
     where dt = date_sub(current_date, 1)
       and extend_info['IS_IBU'] = '0'
       and extend_info['book_channel'] = 'Ctrip'

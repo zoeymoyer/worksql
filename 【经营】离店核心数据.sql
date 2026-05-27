@@ -1,5 +1,5 @@
-with q_user_type as 
-    (select user_id 
+with q_user_type as (
+    select user_id 
         , min(order_date) as min_order_date
     from mdw_order_v3_international
     where dt = '%(DATE)s'
@@ -8,10 +8,9 @@ with q_user_type as
         and order_status not in ('CANCELLED','REJECTED')
         and is_valid='1'
     group by 1
-    )
-
-, c_user_type as 
-    (select user_id
+)
+,c_user_type as (
+    select user_id
         , ubt_user_id
         , substr(min(order_date),1,10) as min_order_date
     from ihotel_default.ceq_three_sync_pull_edw_trade_tripart_qunar_oversea_hotelorder_reconfig_da 
@@ -21,10 +20,9 @@ with q_user_type as
         and extend_info['sub_book_channel'] = 'Direct-Ctrip'
         and order_status <> 'C'
     group by 1,2
-    )
-
-, q_app_order as 
-    (select checkout_date as `日期`
+)
+,q_app_order as (
+    select checkout_date as `日期`
         , case 
             when province_name in ('澳门','香港') then province_name 
             when a.country_name in ('泰国','日本','韩国','新加坡','马来西亚','美国','印度尼西亚','俄罗斯') then a.country_name 

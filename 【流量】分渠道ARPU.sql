@@ -351,3 +351,117 @@ from (
 ) 
 order by order_date 
 ;
+
+
+
+--- 分目的地和新老ARPU数据 20260423
+with user_type as (-----新老客
+    select user_id
+            ,min(order_date) as min_order_date
+    from default.mdw_order_v3_international   --- 海外订单表
+    where dt = '%(DATE)s'
+        and (province_name in ('台湾', '澳门', '香港') or country_name != '中国')
+        and terminal_channel_type in ('www', 'app', 'touch')
+        and order_status not in ('CANCELLED', 'REJECTED')
+        and is_valid = '1'
+    group by 1
+)
+,q_order as (----订单明细表表包含取消 
+    select order_date
+            ,case when province_name in ('澳门','香港') then province_name  when a.country_name in ('泰国','日本','韩国','新加坡','马来西亚','美国','印度尼西亚','俄罗斯') then a.country_name  when e.area in ('欧洲','亚太','美洲') then e.area else '其他' end as mdd
+            -- ,case when province_name in ('澳门','香港') then province_name  when a.country_name in ('泰国','日本','韩国') then a.country_name  else '其他' end as mdd
+            ,case when order_date = b.min_order_date then '新客' else '老客' end as user_type 
+            ,a.user_id,user_name,room_night,order_no,init_gmv
+            ,case when (batch_series like '%23base_ZK_728810%' or batch_series like '%23extra_ZK_ce6f99%')
+                  then (init_commission_after+coalesce(split(coupon_info['23base_ZK_728810'],'_')[1],0)+coalesce(split(coupon_info['23extra_ZK_ce6f99'],'_')[1],0)+coalesce(ext_plat_certificate,0))
+                  else init_commission_after+coalesce(ext_plat_certificate,0) end as final_commission_after
+            ,CAST(a.init_commission_after AS DOUBLE) + coalesce(CAST(a.ext_plat_certificate AS DOUBLE), 0.0) 
+              + CASE WHEN (a.batch_series LIKE '%23base_ZK_728810%' OR a.batch_series LIKE '%23extra_ZK_ce6f99%')
+                    THEN coalesce(CAST(split(a.coupon_info['23base_ZK_728810'],'_')[1] AS DOUBLE), 0.0)
+                        + coalesce(CAST(split(a.coupon_info['23extra_ZK_ce6f99'],'_')[1] AS DOUBLE), 0.0)
+                    ELSE 0.0
+                END AS yj
+            
+            ,coalesce(get_json_object(extendinfomap,'$.bp_adv_amount_realized'),0) * room_night bxt_amt --- 变现提
+
+            ,coalesce(get_json_object(promotion_score_info, '$.deductionPointsInfoV2.exchangeAmount'),0) jf_amt --- 积分补
+            ,coalesce(get_json_object(extendinfomap,'$.V2_BEAT_AMOUNT_AF'),0) * room_night  djb_amt  --- 定价补
+            ,coalesce(get_json_object(extendinfomap,'$.platform_amount'),0) * room_night  plat_amt  --- 平台补
+            ,coalesce(get_json_object(extendinfomap,'$.frame_amount'),0) * room_night + coalesce(cashbackmap['framework_amount'],0)  xyb_amt  --- 协议补
+            ,case when supplier_code in ('hca9008oc4l','hca908oh60s','hca908oh60t','hca9008pb7m','hca9008pb7k','hca908pb70p','hca908pb70o','hca908pb70q','hca908pb70s','hca908pb70r','hca908lp9aj','hca908lp9ag','hca908lp9ai','hca908lp9ah','hca9008lp9v','hca908lp9ak','hca908lp9al','hca908lp9am','hca908lp9an','hca1f71a00i','hca1f71a00j')
+                  then coalesce(follow_price_amount,0) end zjb_amt --- 追价补
+            ,case when (coupon_substract_summary is null 
+                  or batch_series like '%23base_ZK_728810%' 
+                  or batch_series like '%23extra_ZK_ce6f99%') then 0
+                  else coalesce(coupon_substract_summary,0) end as coupon_substract_summary  --- 券补
+            ,row_number() over(partition by order_date,a.user_id order by order_time) rn
+    from default.mdw_order_v3_international a 
+    left join user_type b on a.user_id = b.user_id 
+    left join temp.temp_yiquny_zhang_ihotel_area_region_forever e on a.country_name = e.country_name 
+    where dt = '%(DATE)s'
+        and (province_name in ('台湾','澳门','香港') or a.country_name !='中国') 
+        -- and terminal_channel_type in ('www','app','touch')  -- 用户终端类型
+        and terminal_channel_type = 'app'
+        and is_valid='1'
+        and order_status not in ('CANCELLED','REJECTED')
+        and order_no <> '103576132435'
+        and order_date >= '2024-01-01' and order_date <= date_sub(current_date,1)
+)
+
+,first_order_info as (
+    select  t1.order_date,t1.user_id,t1.user_type,t1.mdd,coupon_substract_summary,jf_amt,djb_amt
+    from q_order t1 
+    where t1.rn=1
+    group by 1,2,3,4,5,6,7
+)
+
+
+
+select t1.order_date
+        ,t1.user_type
+        ,t1.mdd
+        ,uv
+        ,qb_amt + jf_amt + djb_amt qe   --- 当日首单券补
+        ,yj0
+        ,yj30
+        ,yj180
+        ,yj0 / uv    ARPU0
+        ,yj30 / uv   ARPU30
+        ,yj180 / uv  ARPU180
+        ,(qb_amt + jf_amt + djb_amt) / uv cac
+        ,yj0 / (qb_amt + jf_amt + djb_amt)  ltv0_cac
+        ,yj30 / (qb_amt + jf_amt + djb_amt)  ltv30_cac
+        ,yj180 / (qb_amt + jf_amt + djb_amt)  ltv180_cac
+        ,room_night0
+        ,room_night30
+        ,room_night180
+from (
+    select t1.order_date
+        ,if(grouping(t1.user_type)=1,'ALL', t1.user_type) as  user_type
+        ,if(grouping(t1.mdd)=1,'ALL', t1.mdd) as  mdd
+        ,count(distinct t1.user_id) uv
+        ,sum(case when datediff(t2.order_date, t1.order_date) = 0  then final_commission_after end) yj0
+        ,case when max(datediff(t2.order_date,t1.order_date))>=30  then sum(case when datediff(t2.order_date, t1.order_date) <= 30  then final_commission_after end) else null end yj30
+        ,case when max(datediff(t2.order_date,t1.order_date))>=180 then sum(case when datediff(t2.order_date, t1.order_date) <= 180 then final_commission_after end) else null end yj180
+
+        ,sum(case when datediff(t2.order_date, t1.order_date) = 0  then room_night end) room_night0
+        ,case when max(datediff(t2.order_date,t1.order_date))>=30  then sum(case when datediff(t2.order_date, t1.order_date) <= 30  then room_night end) else null end room_night30
+        ,case when max(datediff(t2.order_date,t1.order_date))>=180 then sum(case when datediff(t2.order_date, t1.order_date) <= 180 then room_night end) else null end room_night180
+
+    from first_order_info t1 
+    left join q_order t2 on t1.user_id=t2.user_id and t2.order_date >= t1.order_date
+    group by 1,cube(t1.user_type,t1.mdd)
+) t1 
+left join (
+    select t1.order_date
+        ,if(grouping(t1.user_type)=1,'ALL', t1.user_type) as  user_type
+        ,if(grouping(t1.mdd)=1,'ALL', t1.mdd) as  mdd
+        ,sum(t1.coupon_substract_summary) qb_amt
+        ,sum(t1.djb_amt) djb_amt
+        ,sum(t1.jf_amt) jf_amt
+    from first_order_info t1 
+    group by 1,cube(t1.user_type,t1.mdd)
+)t2 on t1.order_date=t2.order_date and t1.user_type=t2.user_type and t1.mdd=t2.mdd
+
+order by t1.order_date 
+;

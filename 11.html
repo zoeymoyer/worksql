@@ -1,0 +1,725 @@
+<!-- <!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我们的专属飞行棋 ❤️</title>
+    <style>
+        :root {
+            --primary: #ff4d6d;
+            --bg-color: #fff0f3;
+            --cell-bg: #ffffff;
+            --p1-color: #00b4d8;
+            --p2-color: #ff8fa3;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            color: white;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 5px 15px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        /* 游戏面板区 */
+        #game-container {
+            position: relative;
+            width: 95vw;
+            max-width: 600px;
+            /* 高度由JS动态计算 */
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 15px;
+            padding: 10px;
+            margin-bottom: 120px; /* 留出底部骰子的空间 */
+        }
+
+        .cell {
+            position: absolute;
+            background: var(--cell-bg);
+            border: 2px solid #ffccd5;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: var(--primary);
+            box-shadow: 0 4px 6px rgba(255, 77, 109, 0.1);
+            transition: transform 0.2s;
+            padding: 5px;
+            word-break: break-word;
+        }
+
+        .cell:active { transform: scale(0.95); }
+
+        /* 玩家棋子 */
+        .player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            transition: left 0.4s ease-in-out, top 0.4s ease-in-out;
+            z-index: 10;
+        }
+
+        #player1 { background-color: var(--p1-color); }
+        #player2 { background-color: var(--p2-color); }
+
+        /* 底部操作区：骰子 */
+        #controls {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            padding: 15px 20px;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .dice-area { display: flex; align-items: center; gap: 15px; }
+
+        #dice {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 8px 15px rgba(255, 8, 68, 0.3);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* 骰子摇晃动画 */
+        @keyframes rollDice {
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(-20deg) scale(1.1); }
+            50% { transform: rotate(20deg) scale(1.1); }
+            75% { transform: rotate(-10deg) scale(1.1); }
+            100% { transform: rotate(0deg) scale(1); }
+        }
+        .rolling { animation: rollDice 0.5s ease-in-out; }
+
+        button.btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(255, 77, 109, 0.3);
+            cursor: pointer;
+        }
+        button.btn:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
+
+        /* 弹窗提示 */
+        #modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #modal.show { display: flex; opacity: 1; }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 80%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #modal.show .modal-content { transform: scale(1); }
+        .modal-content h2 { color: var(--primary); margin-bottom: 10px; }
+        .modal-content p { font-size: 1.1rem; margin-bottom: 20px; color: #555; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>专属飞行棋 ❤️</h1>
+        <div class="status" id="status-text">👦 轮到 蓝方 掷骰子啦</div>
+    </header>
+
+    <div id="game-container">
+        <div id="player1" class="player">👦</div>
+        <div id="player2" class="player">👧</div>
+        </div>
+
+    <div id="controls">
+        <div class="dice-area">
+            <div id="dice">🎲</div>
+            <span id="dice-result">点击摇骰子</span>
+        </div>
+        <button id="roll-btn" class="btn">摇一摇</button>
+    </div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h2>触发事件！</h2>
+            <p id="modal-text">内容</p>
+            <button class="btn" onclick="closeModal()">知道了</button>
+        </div>
+    </div>
+
+<script>
+    /* ================= 高度自定义配置区 ================= */
+    const CONFIG = {
+        totalSteps: 25,     // 自定义总格子数
+        columns: 5,         // 一行显示几个格子（建议手机端4-5个）
+        player1Start: 0,    // 蓝方初始位置（从0开始）
+        player2Start: 0,    // 粉方初始位置（如果要不同起点，可设置为如：CONFIG.totalSteps - 1）
+        
+        // 自定义每个格子的内容。如果内容少于总步数，会自动循环或留空。
+        cellContent: [
+            "起点", "亲亲一个", "深情拥抱", "喝一杯水", "对方夸你一句",
+            "真心话", "前进2步", "帮对方捶背", "退后1步", "大冒险",
+            "做个鬼脸", "暂停一回合", "唱句情歌", "指定对方做一件事", "十指紧扣1分钟",
+            "讲个笑话", "互相对视30秒", "前进1步", "发个朋友圈表白", "退回到起点",
+            "学猫叫", "给对方倒水", "随便买个小零食", "亲额头", "终点！🎉"
+        ]
+    };
+    /* =================================================== */
+
+    // 游戏状态
+    const state = {
+        turn: 1, // 1 代表 player1, 2 代表 player2
+        p1Pos: CONFIG.player1Start,
+        p2Pos: CONFIG.player2Start,
+        isAnimating: false
+    };
+
+    const container = document.getElementById('game-container');
+    let cellElements = [];
+
+    // 初始化棋盘
+    function initBoard() {
+        const rows = Math.ceil(CONFIG.totalSteps / CONFIG.columns);
+        const cellGap = 5; // 间距
+        // 动态计算每个格子的百分比尺寸
+        const cellW = 100 / CONFIG.columns;
+        const cellH = 80; // 固定格子高度像素
+        
+        container.style.height = `${rows * cellH + (rows + 1) * cellGap}px`;
+
+        for (let i = 0; i < CONFIG.totalSteps; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            
+            // 计算行列 (蛇形布局算法)
+            let row = Math.floor(i / CONFIG.columns);
+            let col = i % CONFIG.columns;
+            // 偶数行从左到右，奇数行从右到左，形成S型折返
+            if (row % 2 !== 0) {
+                col = CONFIG.columns - 1 - col;
+            }
+
+            // 设置绝对定位
+            cell.style.width = `calc(${cellW}% - ${cellGap * 2}px)`;
+            cell.style.height = `${cellH - cellGap * 2}px`;
+            cell.style.left = `calc(${col * cellW}% + ${cellGap}px)`;
+            cell.style.top = `${row * cellH + cellGap}px`;
+
+            // 填充文字
+            let content = CONFIG.cellContent[i] || `格子 ${i}`;
+            cell.innerText = content;
+
+            // 记录坐标用于移动棋子
+            cell.dataset.cx = `calc(${col * cellW}% + ${cellW/2}%)`;
+            cell.dataset.cy = `${row * cellH + cellH/2}px`;
+
+            container.appendChild(cell);
+            cellElements.push(cell);
+        }
+
+        // 初始化棋子位置
+        updatePlayerPosition(1, state.p1Pos, true);
+        updatePlayerPosition(2, state.p2Pos, true);
+    }
+
+    // 更新棋子位置
+    function updatePlayerPosition(playerNum, posIndex, instant = false) {
+        if(posIndex >= CONFIG.totalSteps) posIndex = CONFIG.totalSteps - 1;
+        if(posIndex < 0) posIndex = 0;
+
+        const cell = cellElements[posIndex];
+        const token = document.getElementById(`player${playerNum}`);
+        
+        // 为了防止两个棋子在同一个格子时完全重叠，增加一点偏移
+        const offsetLeft = playerNum === 1 ? -10 : 10;
+        const offsetTop = playerNum === 1 ? -10 : 10;
+
+        token.style.left = `calc(${cell.dataset.cx} - 15px + ${offsetLeft}px)`;
+        token.style.top = `calc(${cell.dataset.cy} - 15px + ${offsetTop}px)`;
+    }
+
+    // 摇骰子事件
+    const diceEl = document.getElementById('dice');
+    const rollBtn = document.getElementById('roll-btn');
+    const resultText = document.getElementById('dice-result');
+
+    rollBtn.addEventListener('click', rollDice);
+    diceEl.addEventListener('click', rollDice);
+
+    function rollDice() {
+        if (state.isAnimating) return;
+        state.isAnimating = true;
+        rollBtn.disabled = true;
+
+        // 添加摇晃动画
+        diceEl.classList.add('rolling');
+        resultText.innerText = "摇晃中...";
+        diceEl.innerText = "🎲";
+
+        setTimeout(() => {
+            diceEl.classList.remove('rolling');
+            
+            // 随机1-6
+            const steps = Math.floor(Math.random() * 6) + 1;
+            diceEl.innerText = steps;
+            resultText.innerText = `掷出了 ${steps} 点！`;
+
+            // 开始移动棋子
+            movePlayer(state.turn, steps);
+
+        }, 500); // 等待动画结束
+    }
+
+    // 棋子移动逻辑（一步一步走）
+    function movePlayer(playerNum, steps) {
+        let currentPos = playerNum === 1 ? state.p1Pos : state.p2Pos;
+        const targetPos = Math.min(currentPos + steps, CONFIG.totalSteps - 1);
+        
+        let stepCount = 0;
+        const moveInterval = setInterval(() => {
+            stepCount++;
+            let nextPos = currentPos + stepCount;
+            
+            updatePlayerPosition(playerNum, nextPos);
+
+            // 到达目标
+            if (nextPos === targetPos) {
+                clearInterval(moveInterval);
+                
+                // 更新内部状态
+                if (playerNum === 1) state.p1Pos = targetPos;
+                else state.p2Pos = targetPos;
+
+                // 检查触发事件
+                setTimeout(() => checkCellEvent(playerNum, targetPos), 500);
+            }
+        }, 400); // 每一格移动耗时
+    }
+
+    // 检查格子事件（弹窗提示任务）
+    function checkCellEvent(playerNum, posIndex) {
+        const text = CONFIG.cellContent[posIndex] || "无事件";
+        const playerName = playerNum === 1 ? "蓝方(👦)" : "粉方(👧)";
+        
+        // 如果文字包含特定关键字可以做特殊处理，这里直接弹窗展示
+        document.getElementById('modal-text').innerHTML = `<strong>${playerName}</strong> 停留在了: <br><br> <span style="font-size:1.5rem; color:#ff4d6d;">${text}</span>`;
+        document.getElementById('modal').classList.add('show');
+    }
+
+    // 关闭弹窗并切换回合
+    function closeModal() {
+        document.getElementById('modal').classList.remove('show');
+        
+        // 判断是否到达终点
+        let currentPos = state.turn === 1 ? state.p1Pos : state.p2Pos;
+        if (currentPos >= CONFIG.totalSteps - 1) {
+            const winner = state.turn === 1 ? "蓝方👦" : "粉方👧";
+            alert(`🎉 恭喜 ${winner} 到达终点！`);
+            // 重置游戏可以在这里实现
+            return;
+        }
+
+        // 切换回合
+        state.turn = state.turn === 1 ? 2 : 1;
+        const nextName = state.turn === 1 ? "蓝方 👦" : "粉方 👧";
+        document.getElementById('status-text').innerText = `轮到 ${nextName} 掷骰子啦`;
+        resultText.innerText = "点击摇骰子";
+        diceEl.innerText = "🎲";
+        
+        state.isAnimating = false;
+        rollBtn.disabled = false;
+    }
+
+    // 启动游戏
+    window.onload = initBoard;
+    
+    // 监听窗口大小改变，动态调整棋盘和棋子
+    window.addEventListener('resize', () => {
+        const rows = Math.ceil(CONFIG.totalSteps / CONFIG.columns);
+        container.style.height = `${rows * 80 + (rows + 1) * 5}px`;
+        // 重新设置每个格子的中心点坐标
+        cellElements.forEach((cell, i) => {
+            const cellW = 100 / CONFIG.columns;
+            const cellH = 80;
+            let row = Math.floor(i / CONFIG.columns);
+            let col = i % CONFIG.columns;
+            if (row % 2 !== 0) col = CONFIG.columns - 1 - col;
+            cell.dataset.cx = `calc(${col * cellW}% + ${cellW/2}%)`;
+            cell.dataset.cy = `${row * cellH + cellH/2}px`;
+        });
+        updatePlayerPosition(1, state.p1Pos, true);
+        updatePlayerPosition(2, state.p2Pos, true);
+    });
+
+</script>
+</body>
+</html> -->
+
+<!-- 新版本202560515 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>飞行棋 · 浪漫私密版</title>
+    <!-- 引入 Tailwind CSS CDN 用于精美 UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Lucide 图标库 -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 针对纯 HTML 环境做一些丝滑的动画微调 */
+        .dice-spin { animation: spin 0.15s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .chess-bounce { animation: bounce 0.6s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        /* 隐藏滚动条但保留滚动功能 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-rose-50 to-indigo-50 flex flex-col items-center p-4 font-sans select-none overflow-hidden">
+
+    <!-- 顶部标题栏 -->
+    <div class="w-full max-w-md flex justify-between items-center mb-3 bg-white/70 backdrop-blur-md p-4 rounded-2xl shadow-sm border border-white/50 z-10">
+        <div class="flex items-center space-x-2">
+            <i data-lucide="sparkles" class="text-rose-500 animate-pulse w-5 h-5"></i>
+            <h1 class="text-lg font-bold bg-gradient-to-r from-rose-600 to-indigo-600 bg-clip-text text-transparent">飞行棋 · 浪漫私密版</h1>
+        </div>
+        <button id="reset-btn" class="p-2 text-gray-500 hover:text-rose-500 transition hidden" onclick="resetGame()">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <!-- 棋盘主体容器 -->
+    <div id="board-container" class="w-full max-w-md flex-1 bg-white/30 backdrop-blur-sm rounded-3xl p-3 mb-24 shadow-inner border border-white/40 overflow-y-auto no-scrollbar max-h-[calc(100vh-180px)]">
+        <!-- 准备界面 -->
+        <div id="setup-view" class="h-64 flex flex-col items-center justify-center space-y-4">
+            <div class="text-center space-y-1">
+                <p class="text-rose-400 text-sm font-medium">精心挑选 66 个趣味互动格子</p>
+                <h2 class="text-xl font-bold text-gray-700">每次开局，皆是全新体验</h2>
+            </div>
+            <button onclick="initGame()" class="px-8 py-3.5 bg-gradient-to-r from-rose-500 to-indigo-500 text-white rounded-full font-bold shadow-lg shadow-rose-500/20 active:scale-95 transition-transform text-sm">
+                🎲 点击洗牌并开始
+            </button>
+        </div>
+        <!-- 动态棋盘格子将插入到这里 -->
+        <div id="game-board" class="grid grid-cols-4 gap-2 hidden"></div>
+    </div>
+
+    <!-- 底部控制面板 -->
+    <div id="control-panel" class="fixed bottom-4 left-4 right-4 max-w-md mx-auto bg-white/90 backdrop-blur-xl p-4 rounded-2xl shadow-xl border border-rose-50/50 z-40 hidden">
+        <div class="text-center mb-3">
+            <span id="player-turn" class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white mb-1.5 shadow-sm">
+                轮到：男生
+            </span>
+            <div id="msg-box" class="text-xs font-medium text-slate-700 bg-slate-50 p-2 rounded-xl border border-slate-100 min-h-[40px] flex items-center justify-center px-3">
+                通过剪刀石头布猜先，胜者首发掷骰子。
+            </div>
+        </div>
+        
+        <div class="flex items-center justify-between px-2">
+            <div class="flex flex-col items-center">
+                <span id="dice-icon" class="text-3xl transition-transform">⚀</span>
+                <span id="dice-point" class="text-[10px] font-mono text-gray-400 mt-1">POINT: 1</span>
+            </div>
+            <button id="roll-btn" onclick="rollDice()" class="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-rose-500 to-indigo-500 text-white rounded-xl font-bold text-sm shadow-md active:scale-95 shadow-rose-500/10 transition-all">
+                <i data-lucide="dice-5" class="w-4 h-4"></i>
+                <span>掷骰子移动</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 胜利结算弹窗 -->
+    <div id="win-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white p-6 z-50 text-center hidden">
+        <div class="bg-white text-slate-800 p-6 rounded-3xl max-w-xs shadow-2xl space-y-4 border border-rose-100 scale-95 transition-transform">
+            <h2 class="text-2xl font-black text-rose-500">🏆 终点达成！</h2>
+            <p id="win-msg" class="text-sm text-gray-500"></p>
+            <p class="text-xs bg-rose-50 text-rose-600 p-2 rounded-lg font-medium">输掉的一方需要无条件满足胜者一个小愿望哦~</p>
+            <button onclick="resetGame()" class="w-full bg-gradient-to-r from-rose-500 to-indigo-500 text-white py-2.5 rounded-xl font-bold text-sm shadow-md">
+                再来一局
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 核心数据源
+        const RAW_DATA = [
+            "脱掉身上任意一件纺织物", "把酒倒在对方身上，并且舔干净", "奖励一个耍赖皮的机会", "说出最想和对方做的事",
+            "在胸/大腿内侧/屁股上任意一处写下羞耻词汇", "可以穿上所有衣服", "说出您的敏感带，并且让对方随意玩1min",
+            "认认真真的帮对方洗手", "直视对方的眼睛1min", "让对方给自己挑自己喜欢的情趣内衣/项圈",
+            "在后入、战立和女上位之间选一个今晚实施", "游戏结束前请叫对方主人", "自摸30s", "掐脖子接吻30s",
+            "从颈部吻到颈椎一次", "大字躺平仍由对方欺负并且录音", "说出你最喜欢的情趣用品", "拿起对方的手揉自己的胸",
+            "用嘴巴解开对方身上所有得扣子", "在对方耳边轻喘5下", "拍一张色情合照", "脱到只剩一件衣服",
+            "含住对方的手指1分钟", "用嘴巴喂对方喝下一杯酒", "涂口红在对方身上留上唇印", "说出最喜欢的姿势",
+            "用口红在对方脸上随意画一个图案", "连续做3组30s以上的平板支撑", "自拍一段表情包小视频",
+            "下次惩罚或奖励的时间或内容乘2", "脱掉对方一件衣服", "给对方按摩10分钟", "法式湿吻30s",
+            "穿一天对方规定风格的服饰搭配", "后退2格", "脱掉自己的一件贴身衣物（内衣内裤）", "获得一次免罚机会",
+            "任选一项奖励执行", "前进3格", "两人在口里吃一颗巧克力，融化为止", "接吻对方额头鼻子嘴唇脖子",
+            "小红书搜索纯欲情侣照，选择一张双方都比较喜欢的进行", "挑逗对方敏感部位15s", "至少尝试3种抱抱姿势（参考小红书）",
+            "享受对方亲全身1min", "按对方角色设定演绎一天", "脱掉自己所有衣服", "摸TA下体摸坚挺或者摸出水",
+            "舔对方耳垂30s", "在TA耳边亲昵的叫老公/老婆", "舔或者轻咬TA乳头30s", "和对方深情紧紧拥抱30s",
+            "舔对方或亲咬对方耳垂30s", "1小时内每10分钟亲一次", "获得对方给自己按摩10分钟", "吸/舔/咬敏感部位30s",
+            "润肤霜/精油给对方按摩胸/屁股30s", "撅起屁屁让对方打10下", "伸进衣服摸她屁股和熊", "伸进内裤抚摸1分钟",
+            "含一口酒水嘴对嘴喂对方", "模仿指定3种动物的叫声并录", "用胸或蛋蹭脸40秒", "舔TA下体30s",
+            "倒酸奶在锁骨让TA舔干净", "舔乳头30秒", "同时抚摸异性胸或下体30秒", "含热水口30秒", "含冰口30秒",
+            "女握男龟头绕乳头按摩30s", "乳交30秒", "倒酸奶在乳头上让TA舔干净", "互舔舔乳头30秒", "观音坐莲30秒",
+            "女坐在男身上扭动屁股20s", "亲TA熊并抚摸下体", "跪姿舔对方屁股30秒", "69运动30秒", "女方坐你背上俯卧撑3个",
+            "拍一段自慰视频15s", "抚摸对方臀部10秒", "女用脚帮男按摩下体1分钟", "在对方耳根喘气20秒", "表演自摸30秒",
+            "女生用手自慰后让男吸吮手指", "TA站着自己跪着帮TA口", "男躺着女脱光蹲在男脸上", "女生蹲在男脸上帮女口交30s",
+            "在大腿内侧倒酸奶并让TA舔干净", "脱一件衣服一边跳脱衣舞30秒", "坐在对方腿上舌吻1分钟",
+            "隔着衣服抚摸下体1分钟", "表演狗喝水1杯酒", "用嘴喂酒1口", "洗鸳鸯浴互洗私处", "从额头舔到下体",
+            "按摩胸部10秒", "喂对方喝水", "JJ倒满酸奶并让对方舔干净", "女用下体为男JJ按摩1分钟", "手牵手30秒",
+            "女让男生吸吮收支另一只手抚摸他JJ", "猪八戒背媳妇", "吻遍TA全身", "女双手托奶送南方嘴里吸吮1分钟",
+            "学猫叫三声", "角色互换女学男抽插男学女叫床", "男用JJ磨蹭女生下体1分钟，禁止进入", "亲吻一下对方的手",
+            "被对方挠痒痒30秒", "按住对方头给自己舔任意部位30秒", "从背后抱对方一分钟", "亲吻对方额头",
+            "拔一根阴毛", "后退三格", "亲吻对方手背10秒", "两人下体相互摩擦1分钟", "给对方按大腿腿1分钟",
+            "酸奶倒胸部至下体让对方舔干净", "坐在对方腿上亲亲10秒", "相互喂对方食物或饮料", "女生玩一次真心话",
+            "男吸吮阴蒂边用手抽插1分钟", "给对方按小腿1分钟", "给对方说3次我爱你", "男生用嘴给女生喂食物",
+            "为对方口交并录下视频", "给对方唱一首歌", "做1个自认为可爱的表情自拍", "女生闭眼被男生亲吻额头5秒",
+            "女生被公主抱10秒", "给TA舔私处1分钟", "69式30秒", "帮对方脱一件衣服", "女生被挠痒痒忍住不能笑",
+            "轻捏对方的胸1次", "叫1声亲老公/亲老婆", "和对方深情接吻30秒", "一起恶搞自拍1张", "女方被男方抱着房内绕一圈",
+            "相互拥抱30秒", "挑逗对方下巴调戏5秒", "喝一杯交杯酒", "为对方脱一件衣物", "从头到脚抚摸对方一遍",
+            "后退3格并脱一件衣服", "从背后抱住对方随意抚摸30秒", "舔对方耳根到胸口", "手伸进对方裤里随意发挥30秒",
+            "脱裤子并打屁股5下"
+        ];
+
+        const TOTAL_CELLS = 66;
+        const DICE_CHARS = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+        
+        let board = [];
+        let players = [
+            { id: 1, name: '男生', pos: 0, color: '#ff4d94' },
+            { id: 2, name: '女生', pos: 0, color: '#7048e8' }
+        ];
+        let currentPlayer = 0;
+        let isRolling = false;
+
+        // 初始化游戏
+        function initGame() {
+            // 洗牌算法抓取66个
+            const shuffled = [...RAW_DATA].sort(() => 0.5 - Math.random());
+            const selected = shuffled.slice(0, TOTAL_CELLS);
+            
+            board = [
+                { type: 'start', content: '🏁 起点' },
+                ...selected.map(item => ({ type: 'normal', content: item })),
+                { type: 'end', content: '👑 终点' }
+            ];
+
+            players[0].pos = 0;
+            players[1].pos = 0;
+            currentPlayer = 0;
+
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('game-board').classList.remove('hidden');
+            document.getElementById('control-panel').classList.remove('hidden');
+            document.getElementById('reset-btn').classList.remove('hidden');
+            
+            renderBoard();
+            updateTurnUI();
+            lucide.createIcons(); // 初始化图标
+        }
+
+        // 渲染棋盘DOM
+        function renderBoard() {
+            const boardEl = document.getElementById('game-board');
+            boardEl.innerHTML = '';
+
+            board.forEach((cell, idx) => {
+                const hasP1 = players[0].pos === idx;
+                const hasP2 = players[1].pos === idx;
+
+                let bgClass = 'bg-white/80 shadow-sm border border-rose-100/60';
+                let textClass = 'text-gray-600';
+                if (cell.type === 'start') { bgClass = 'bg-emerald-500 text-white font-bold shadow-md'; textClass = 'text-white'; }
+                if (cell.type === 'end') { bgClass = 'bg-amber-500 text-white font-bold shadow-md'; textClass = 'text-white'; }
+
+                const shortContent = cell.content.length > 14 ? cell.content.substring(0, 12) + '...' : cell.content;
+
+                const cellHtml = `
+                    <div class="aspect-square rounded-xl p-1.5 flex flex-col items-center justify-between text-center relative transition-all duration-300 ${bgClass}">
+                        <span class="text-[9px] text-gray-400 absolute top-0.5 left-1 font-mono">${idx}</span>
+                        <div class="flex-1 flex items-center justify-center px-0.5 mt-2">
+                            <p class="text-[10px] leading-tight font-medium ${textClass}">${shortContent}</p>
+                        </div>
+                        <div class="flex justify-center space-x-1 h-3.5 w-full items-center">
+                            ${hasP1 ? `<div class="w-3 h-3 rounded-full border border-white shadow-md chess-bounce" style="background-color: ${players[0].color}"></div>` : ''}
+                            ${hasP2 ? `<div class="w-3 h-3 rounded-full border border-white shadow-md chess-bounce" style="background-color: ${players[1].color}"></div>` : ''}
+                        </div>
+                    </div>
+                `;
+                boardEl.insertAdjacentHTML('beforeend', cellHtml);
+            });
+        }
+
+        // 更新当前轮到谁的UI
+        function updateTurnUI() {
+            const turnEl = document.getElementById('player-turn');
+            const p = players[currentPlayer];
+            turnEl.innerText = `轮到：${p.name}`;
+            turnEl.style.backgroundColor = p.color;
+        }
+
+        // 掷骰子动画
+        function rollDice() {
+            if (isRolling) return;
+            isRolling = true;
+            
+            const diceIcon = document.getElementById('dice-icon');
+            const rollBtn = document.getElementById('roll-btn');
+            
+            diceIcon.classList.add('dice-spin');
+            rollBtn.disabled = true;
+            rollBtn.classList.add('bg-slate-300');
+            document.getElementById('msg-box').innerText = '骰子疯狂旋转中...';
+
+            let count = 0;
+            const timer = setInterval(() => {
+                const rand = Math.floor(Math.random() * 6) + 1;
+                diceIcon.innerText = DICE_CHARS[rand - 1];
+                document.getElementById('dice-point').innerText = `POINT: ${rand}`;
+                count++;
+                
+                if (count > 8) {
+                    clearInterval(timer);
+                    const finalValue = Math.floor(Math.random() * 6) + 1;
+                    diceIcon.innerText = DICE_CHARS[finalValue - 1];
+                    document.getElementById('dice-point').innerText = `POINT: ${finalValue}`;
+                    
+                    diceIcon.classList.remove('dice-spin');
+                    rollBtn.disabled = false;
+                    rollBtn.classList.remove('bg-slate-300');
+                    
+                    movePlayer(finalValue);
+                }
+            }, 80);
+        }
+
+        // 核心位移与触发判定逻辑
+        function movePlayer(steps) {
+            let p = players[currentPlayer];
+            let targetPos = p.pos + steps;
+
+            if (targetPos >= board.length - 1) {
+                targetPos = board.length - 1;
+                p.pos = targetPos;
+                renderBoard();
+                showWinModal(`🎉 恭喜 ${p.name} 率先一步攻克终点！`);
+                return;
+            }
+
+            const targetContent = board[targetPos].content;
+            let logMsg = `${p.name} 掷出 ${steps} 点 → 第 ${targetPos} 格：【${targetContent}】`;
+
+            // 功能格子判断逻辑
+            if (targetContent.includes('前进')) {
+                const match = targetContent.match(/前进(\d+)格/);
+                const num = match ? parseInt(match[1]) : 3;
+                targetPos = Math.min(targetPos + num, board.length - 1);
+                logMsg += ` 🚀 额外前进 ${num} 格！`;
+            } else if (targetContent.includes('后退')) {
+                const match = targetContent.match(/后退(\d+)格/);
+                const num = match ? parseInt(match[1]) : 2;
+                targetPos = Math.max(targetPos - num, 0);
+                logMsg += ` 🐌 往后倒退 ${num} 格！`;
+            }
+
+            p.pos = targetPos;
+            document.getElementById('msg-box').innerText = logMsg;
+            
+            // 如果加算后到了终点
+            if (targetPos >= board.length - 1) {
+                showWinModal(`🎉 恭喜 ${p.name} 率先一步攻克终点！`);
+                return;
+            }
+
+            // 换人
+            currentPlayer = currentPlayer === 0 ? 1 : 0;
+            renderBoard();
+            updateTurnUI();
+        }
+
+        function showWinModal(text) {
+            document.getElementById('win-msg').innerText = text;
+            document.getElementById('win-modal').classList.remove('hidden');
+        }
+
+        function resetGame() {
+            document.getElementById('win-modal').classList.add('hidden');
+            document.getElementById('game-board').classList.add('hidden');
+            document.getElementById('control-panel').classList.add('hidden');
+            document.getElementById('reset-btn').classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+            document.getElementById('msg-box').innerText = '通过剪刀石头布猜先，胜者首发掷骰子。';
+        }
+
+        // 首次加载渲染基础图标
+        lucide.createIcons();
+    </script>
+</body>
+</html>

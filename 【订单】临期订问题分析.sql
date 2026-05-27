@@ -521,6 +521,80 @@ order by 1,2,3,4
 ;
 
 
+--- 3、产品力数据
+with qc_price as (
+    select check_out
+        ,if(grouping(per_type)=1,'ALL', per_type) as  per_type
+        ,if(grouping(holiday_type)=1,'ALL', holiday_type) as  holiday_type
+        ,if(grouping(mdd)=1,'ALL', mdd) as  mdd
+        ,count(distinct case when  pay_price_compare_result = 'Qlose' then id end) / count(distinct id) as `支付价lose率`
+        ,sum(case when  pay_price_diff > 0 then pay_price_diff end) / sum(case when pay_price_diff > 0  then ctrip_pay_price end) as `支付价lose深度`
+        ,sum(case when  pay_price_diff < 0 then pay_price_diff end) / sum(case when pay_price_diff < 0  then ctrip_pay_price end) as `支付价beat深度`
+        ,count(distinct id) `支付价抓取次数`
+        ,count(distinct case when pay_price_compare_result = 'Qlose' then id end) as `支付价lose数`
+        ,count(distinct case when pay_price_compare_result = 'Qbeat' then id end) as `支付价beat数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.03 and pay_price_diff/ctrip_pay_price <= 0 then id end)      `支付价beat0-3%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.04 and pay_price_diff/ctrip_pay_price <= -0.03 then id end)  `支付价beat3-4%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.05 and pay_price_diff/ctrip_pay_price <= -0.04 then id end)  `支付价beat4-5%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.06 and pay_price_diff/ctrip_pay_price <= -0.05 then id end)  `支付价beat5-6%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.07 and pay_price_diff/ctrip_pay_price <= -0.06 then id end)  `支付价beat6-7%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price>-0.08 and pay_price_diff/ctrip_pay_price <= -0.07 then id end)  `支付价beat7-8%次数`
+        ,count(distinct case when  pay_price_diff<0 and pay_price_diff/ctrip_pay_price <= -0.08 then id end)  `支付价beat8%以上次数`
+    from (
+        select concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2)) as order_date
+            ,case when province_name in ('澳门','香港') then '港澳'  
+                    when a.country_name in ('德国','英国','法国','意大利','美国','西班牙','澳大利亚','土耳其','阿联酋','俄罗斯') then '海长'
+                    when a.country_name in ('日本','韩国','泰国') then a.country_name 
+                    else '其他' end as new_mdd
+            ,case when province_name in ('澳门','香港') then province_name  when a.country_name in ('泰国','日本','韩国','新加坡','马来西亚','美国','印度尼西亚','俄罗斯') then a.country_name  when c.area in ('欧洲','亚太','美洲') then c.area else '其他' end as mdd
+            ,case when identity in ('R1','R1_5') then '新客' else '老客' end as user_type
+            ,id,pay_price_diff,ctrip_pay_price,pay_price_compare_result
+            
+            -- 【新增】: 使用解析后的 order_date 和 check_in 日期计算提前订分布
+            ,case when datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) < 0 or datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) = 0 then '凌晨订&当天订'
+                  when datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) between 1 and 3    then '提前订1-3天'
+                  when datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) between 4 and 7    then '提前订4-7天'
+                  when datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) between 8 and 14   then '提前订8-14天'
+                  when datediff(check_in, concat(substr(dt,1,4),'-',substr(dt,5,2),'-',substr(dt,7,2))) between 15 and 30  then '提前订15-30天'
+                  else '提前订31+' 
+             end as per_type
+            ,case
+                when check_out between '2026-04-04' and '2026-04-06' then '26年清明'
+                when check_out between '2026-02-15' and '2026-02-23' then '26年春节'
+                when check_out between '2025-05-01' and '2025-05-05' then '25年五一'
+            end as holiday_type,check_out
+        from default.dwd_hotel_cq_compare_price_result_intl_hi a
+        left join temp.temp_yiquny_zhang_ihotel_area_region_forever c on a.country_name = c.country_name 
+        where dt >= '20250101' and dt <= replace(date_sub(current_date, 1),'-','')
+            and business_type = 'intl_crawl_cq_spa'
+            and compare_type = 'PHYSICAL_ROOM_TYPE_LOWEST'
+            and room_type_cover = 'Qmeet'
+            and ctrip_room_status = 'true' 
+            and qunar_room_status = 'true'
+            and (check_out between '2026-04-04' and '2026-04-06' or check_out between '2026-02-15' and '2026-02-23' or check_out between '2025-05-01' and '2025-05-05')
+    )t
+    group by check_out,cube(per_type,holiday_type,mdd)
+)
+
+select check_out,mdd
+      ,holiday_type
+      ,per_type
+      ,`支付价lose率`
+      ,`支付价lose深度`
+      ,`支付价beat深度`
+      ,`支付价beat数`       /   `支付价抓取次数`  `beat率`
+      ,`支付价beat0-3%次数`   / `支付价抓取次数`  `支付价beat0-3%率`
+      ,`支付价beat3-4%次数`   / `支付价抓取次数`  `支付价beat3-4%率`
+      ,`支付价beat4-5%次数`   / `支付价抓取次数`  `支付价beat4-5%率`
+      ,`支付价beat5-6%次数`   / `支付价抓取次数`  `支付价beat5-6%率`
+      ,`支付价beat6-7%次数`   / `支付价抓取次数`  `支付价beat6-7%率`
+      ,`支付价beat7-8%次数`   / `支付价抓取次数`  `支付价beat7-8%率`
+      ,`支付价beat8%以上次数` /  `支付价抓取次数`  `支付价beat8%以上率`
+from qc_price
+order by 1,2,3,4
+;
+
+
 --- 4、顺畅度数据
 with user_type as(
     select user_id
