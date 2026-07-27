@@ -543,3 +543,115 @@ from (
 ) t
 group by 1,3
 ;
+
+
+select order_date
+        ,case when province_name in ('澳门','香港') then province_name  when a.country_name in ('泰国','日本','韩国','新加坡','马来西亚','美国','印度尼西亚','俄罗斯') then a.country_name  when e.area in ('欧洲','亚太','美洲') then e.area else '其他' end as mdd
+        ,city_name,a.user_id,init_gmv,order_no,room_night
+        ,hotel_grade
+        ,hotel_seq,hotel_name
+        ,physical_room_id
+        ,qta_product_id -- room_id
+        ,get_json_object(extendinfomap,'$.traceId') as traceId
+from default.mdw_order_v3_international a 
+left join temp.temp_yiquny_zhang_ihotel_area_region_forever e on a.country_name = e.country_name 
+where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd')
+    and (province_name in ('台湾','澳门','香港') or a.country_name !='中国') 
+    and terminal_channel_type = 'app'
+    and (first_cancelled_time is null or date(first_cancelled_time) > order_date) 
+    and (first_rejected_time is null or date(first_rejected_time) > order_date) 
+    and (refund_time is null or date(refund_time) > order_date)
+    and is_valid='1'
+    and order_date >= '2025-05-01' and order_date <= date_sub(current_date, 1)
+    and order_no <> '103576132435'
+    and order_no in ('454465343018' ,'454466098222' ,'454468972108' ,'454469387465' ,'454466415804' ,'454466344634' ,'454466758334' ,'454468568682' ,'454469500490' ,'454464481751' ,'454464738266' ,'104533434729' ,'454466535782' ,'454467068358' ,'454468047187' ,'454464951208' ,'454465177854' ,'454465219020' ,'454469838770' ,'454466546882' ,'454465003055' ,'454465468847' ,'454465814694' ,'454465650391' ,'454465332359' ,'454465647557' ,'454465343183' ,'454466211019' )
+;
+
+
+
+
+-- 1、挽留核心指标
+with cancel_page AS ( --- O页取消页
+    select concat(substr(dt, 1, 4),'-',substr(dt, 5, 2),'-',substr(dt, 7, 2)) AS dt
+         ,user_name
+         ,get_json_object(get_json_object(value,'$.ext.exposeLogData'), '$.orderNo') as orderNo
+         ,get_json_object(value, '$.common.traceId') as trace_id
+    from default.dw_qav_ihotel_track_info_di
+    where  dt between replace('2026-01-01' ,'-','') and replace(date_sub(current_date, 1) ,'-','')
+        and key = 'ihotel/OrderDetail/OrderInfo/click/actionBtn'
+        and get_json_object(value, '$.ext.button.menu') = '取消订单'
+    group by 1,2,3,4
+)
+,wanliu_show as (--- 挽留弹窗曝光
+    select  concat(substr(dt, 1, 4),'-',substr(dt, 5, 2),'-',substr(dt, 7, 2)) AS dt
+            ,user_name
+            ,get_json_object(value, '$.common.traceId') as trace_id
+            ,count(1) pv
+    from default.dw_qav_ihotel_track_info_di
+    where  dt between replace('2026-01-01' ,'-','') and replace(date_sub(current_date, 1) ,'-','')
+        and key in ('ihotel/OrderDetail/cancelReason/show/cancelBlock')
+        and get_json_object(value, '$.ext.trendType') in ('cash','all') --限制领取红包和红包+积分
+    group by 1,2,3
+)
+,wanliu_order as ( --- 挽留成功：点击领取
+    select  concat(substr(dt, 1, 4),'-',substr(dt, 5, 2),'-',substr(dt, 7, 2)) AS dt,
+            user_name,
+            get_json_object(value, '$.common.traceId') as trace_id
+    from default.dw_qav_ihotel_track_info_di
+    where  dt between replace('2026-01-01' ,'-','') and replace(date_sub(current_date, 1) ,'-','')
+        and key = 'ihotel/OrderDetail/cancelReason/click/cancelBlocked'
+        and get_json_object(value, '$.ext.trendType') in ('cash','all')--限制领取红包和红包+积分
+    group by 1,2,3
+)
+,cancelOrder AS (--- 取消订单
+    select  order_no,
+            DATE(first_cancelled_time) AS cancelDate,
+            user_id,
+            user_name,
+            hotel_seq,
+            room_night,
+            case when (batch_series like '%23base_ZK_728810%' or batch_series like '%23extra_ZK_ce6f99%')
+                    then (init_commission_after+coalesce(split(coupon_info['23base_ZK_728810'],'_')[1],0)+coalesce(split(coupon_info['23extra_ZK_ce6f99'],'_')[1],0)+coalesce(ext_plat_certificate,0))
+                else init_commission_after+coalesce(ext_plat_certificate,0)
+                end as cancel_yj
+            ,checkout_date
+    from default.mdw_order_v3_international
+    where dt = from_unixtime(unix_timestamp() -86400, 'yyyyMMdd') 
+        and (province_name in ('台湾', '澳门', '香港') or country_name != '中国')
+        and terminal_channel_type = 'app'
+        and first_cancelled_time is not null
+        and order_status = 'CANCELLED'
+        and is_valid = '1'
+        and order_no <> '103576132435'
+        and DATE(first_cancelled_time) >= '2025-02-03'
+        and DATE(first_cancelled_time) <= date_sub(current_date, 1)
+)
+
+
+select *
+from (
+
+    select  a.dt,
+            count(distinct a.orderNo)  as `进入取消页面订单量`,
+            count(distinct case when d.user_name is not null then a.orderNo end)  as `进入取消页面展示弹窗订单量`,
+            count(distinct case when e.user_name is not null then a.orderNo end)  as `点击领取订单量(预定)`,
+            count(distinct case when e.user_name is not null and c.order_no is not null then a.orderNo end)  as `挽留成功订单量(预定)`,
+            count(distinct c.order_no) as `取消订单量`,
+            count(distinct case when d.user_name is null then c.order_no end) as `未触达取消订单量`,
+            count(distinct case when d.user_name is not null and e.user_name is null then c.order_no end) as `触达未点击领取取消订单量`,
+            count(distinct case when d.user_name is not null and e.user_name is not null then c.order_no end) as `触达并点击领取取消订单量`,
+            count(distinct c.order_no) / count(distinct a.orderNo) as `取消率`
+    from (
+        select t1.*
+        from  cancel_page t1 
+    ) a
+    -- 取消订单
+    left join cancelOrder c on a.user_name = c.user_name and a.dt = c.cancelDate and c.order_no = a.orderNo
+    -- 挽留弹窗曝光
+    left join wanliu_show d on a.user_name = d.user_name and a.dt = d.dt and a.trace_id=d.trace_id
+    -- 挽留成功订单（点击领取）
+    left join wanliu_order e on a.user_name=e.user_name and a.dt=e.dt
+    group by a.dt
+) t1
+order by t1.dt desc
+;

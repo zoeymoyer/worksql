@@ -37,7 +37,7 @@ with qc_price as (
         from default.dwd_hotel_cq_compare_price_result_intl_hi a
         left join temp.temp_yiquny_zhang_ihotel_area_region_forever c on a.country_name = c.country_name 
         where dt >= '20260410' and dt <= replace(date_sub(current_date, 1),'-','')
-            -- and business_type = 'intl_crawl_cq_spa'  -- intl_crawl_cq_spa 抓取  intl_crawl_cq_api_order 生单  intl_crawl_cq_api_userview 主站 intl_crawl_cq_api_userview_acc 主站模拟券后价
+            -- and business_type = 'intl_crawl_cq_spa'  -- intl_crawl_cq_spa 抓取  intl_crawl_cq_api_order 生单  intl_crawl_cq_api_userview 主站（流量） intl_crawl_cq_api_userview_acc 主站模拟券后价
             and business_type in ('intl_crawl_cq_spa', 'intl_crawl_cq_api_order', 'intl_crawl_cq_api_userview_acc')
             and compare_type = 'PHYSICAL_ROOM_TYPE_LOWEST'
             and room_type_cover = 'Qmeet'

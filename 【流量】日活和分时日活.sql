@@ -100,7 +100,7 @@ from (
 
 
 with ldbo_uv as (  --- sdbo 小时级
-    select dt,user_id,action_time
+    select dt,user_id,substr(concat(substr(action_time,1,4),'-',substr(action_time,5,2),'-',substr(action_time,7,2),substr(action_time,9)),1,19) action_time
     from (
         select distinct dt 
                 ,a.user_id

@@ -221,6 +221,7 @@ left join (
     left join b_price_info t2 on t1.user_name = t2.user_name and t1.dt = t2.dt
     left join abtest t3 on t1.user_name = t3.user_name and t1.dt = t3.dt
     where t3.user_name is not null and t2.user_name is not null
+    group by 1,2
 )t2 on t1.dt = t2.dt and t1.version = t2.version
 order by 1,2
 ;
